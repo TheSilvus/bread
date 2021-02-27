@@ -16,8 +16,8 @@ static TIMER_CHECK_MS: Duration = Duration::from_millis(50);
 fn main() {
     let duration = 10;
 
-    let width = 100;
-    let height = 100;
+    let width = 1000;
+    let height = 1000;
 
     //let center = Complex32::new(-0.158, 1.033);
     //let size = 0.03;
@@ -61,7 +61,12 @@ fn main() {
 
     for (i, buffer) in buffers.iter().enumerate() {
         let samples = buffer.buffer.buffer.iter().map(|i| *i as u64).sum::<u64>();
-        println!("Buffer {} with {} samples, {:.2} samples/s, {:.2} samples/pixel, {:.2} samples/pixel/s", i, samples, samples as f64 / duration as f64, samples as f64 / (width * height) as f64, samples as f64 / (width * height) as f64 / duration as f64);
+        println!("Buffer {} with {} samples, {:.2} samples/s, {:.2} samples/pixel, {:.4} samples/pixel/s",
+                 i,
+                 samples,
+                 samples as f64 / duration as f64,
+                 samples as f64 / (width * height) as f64,
+                 samples as f64 / (width * height) as f64 / duration as f64);
     }
 
     image::save_buffer(
