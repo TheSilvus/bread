@@ -11,16 +11,16 @@ use std::io::BufWriter;
 use std::time::Duration;
 use std::time::Instant;
 
-static TIMER_CHECK_MS: u64 = 100;
+static TIMER_CHECK_MS: Duration = Duration::from_millis(50);
 
 fn main() {
-    let width = 1000;
-    let height = 1000;
+    let width = 100;
+    let height = 100;
 
-    //let center = Complex32::new(-0.158, 1.033);
-    //let size = 0.03;
-    let center = Complex32::new(0.0, 0.0);
-    let size = 4.0;
+    let center = Complex32::new(-0.158, 1.033);
+    let size = 0.03;
+    //let center = Complex32::new(0.0, 0.0);
+    //let size = 4.0;
 
     let min = center - Complex32::new(size / 2., size / 2.);
     let max = center + Complex32::new(size / 2., size / 2.);
@@ -30,27 +30,27 @@ fn main() {
 
         buffers: vec![
             BrotBuffer {
-                width: width,
-                height: height,
+                width,
+                height,
                 min,
                 max,
-                min_iterations: 30,
-                max_iterations: 150,
+                min_iterations: 10,
+                max_iterations: 50,
             },
             BrotBuffer {
-                width: width,
-                height: height,
+                width,
+                height,
                 min,
                 max,
-                min_iterations: 30,
-                max_iterations: 700,
+                min_iterations: 10,
+                max_iterations: 400,
             },
             BrotBuffer {
-                width: width,
-                height: height,
+                width,
+                height,
                 min,
                 max,
-                min_iterations: 30,
+                min_iterations: 10,
                 max_iterations: 2000,
             },
         ],
@@ -59,15 +59,15 @@ fn main() {
 
     println!(
         "{:?}",
-        buffers[0].buffer.buffer.iter().map(|s| *s).sum::<u32>()
+        buffers[0].buffer.buffer.iter().copied().sum::<u32>()
     );
     println!(
         "{:?}",
-        buffers[1].buffer.buffer.iter().map(|s| *s).sum::<u32>()
+        buffers[1].buffer.buffer.iter().copied().sum::<u32>()
     );
     println!(
         "{:?}",
-        buffers[2].buffer.buffer.iter().map(|s| *s).sum::<u32>()
+        buffers[2].buffer.buffer.iter().copied().sum::<u32>()
     );
 
     image::save_buffer(
@@ -125,8 +125,7 @@ impl Brot {
                         .iter()
                         .map(|b| HitBuffer::new(b.width, b.height, b.min, b.max))
                         .collect::<Vec<_>>();
-                    let mut timer =
-                        Timer::new(self.duration, Duration::from_millis(TIMER_CHECK_MS));
+                    let mut timer = Timer::new(self.duration, TIMER_CHECK_MS);
                     while !timer.check() {
                         let c = Complex32::new(rng.gen_range(-2.0, 2.0), rng.gen_range(-2.0, 2.0));
                         let z_initial = Complex32::new(0.0, 0.0);
@@ -149,7 +148,7 @@ impl Brot {
                             }
                         }
                     }
-                    
+
                     buffers
                 }));
             }
