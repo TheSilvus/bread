@@ -58,8 +58,12 @@ fn main() {
         ],
         results: None,
     };
+    
+    println!("Running");
     brot.run();
     brot.print_stats();
+    println!("Stats");
+    println!("Storing");
     brot.store();
 
     let buffers = brot.results.unwrap();
@@ -104,8 +108,6 @@ struct Brot {
 }
 impl Brot {
     fn run(&mut self) {
-        println!("Setting up");
-
         let iterations = self
             .buffers
             .iter()
@@ -113,7 +115,6 @@ impl Brot {
             .max()
             .expect("No buffer");
 
-        println!("Starting");
         self.results = Some(
             thread::scope(|scope| {
                 let mut threads = vec![];
@@ -130,7 +131,7 @@ impl Brot {
                         let mut timer = Timer::new(Instant::now(), self.duration, TIMER_CHECK_MS);
                         while !timer.check() {
                             let c =
-                                Complex32::new(rng.gen_range(-2.0, 2.0), rng.gen_range(-2.0, 2.0));
+                                Complex32::new(rng.gen_range(-2.0..2.0), rng.gen_range(-2.0..2.0));
                             let z_initial = Complex32::new(0.0, 0.0);
 
                             if Brot::approximate_is_in_mandelbrot(c) {
@@ -392,10 +393,6 @@ impl HitBuffer {
             min,
             max,
         }
-    }
-
-    fn from_buffer(min: Complex32, max: Complex32, buffer: Buffer<u32>) -> HitBuffer {
-        HitBuffer { buffer, min, max }
     }
 
     fn hit(&mut self, c: Complex32) {

@@ -8,8 +8,7 @@ edition = "2018"
 
 [dependencies]
 num = "0.3"
-rand = { version = "0.7", features = ["small_rng"] }
+rand = { version = "0.8", features = ["small_rng"] }
 image = "0.23"
-byteorder = "1"
 crossbeam = "0.8"
 clt = "0.0.6"
