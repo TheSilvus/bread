@@ -14,9 +14,6 @@ use std::time::Instant;
 static TIMER_CHECK_MS: Duration = Duration::from_millis(50);
 
 fn main() {
-    let duration = 10;
-    let keep = false;
-
     let width = 1000;
     let height = 1000;
 
@@ -27,9 +24,11 @@ fn main() {
 
     let min = center - Complex32::new(size / 2., size / 2.);
     let max = center + Complex32::new(size / 2., size / 2.);
-    let mut buffers = Brot {
+
+    let mut brot = Brot {
         thread_count: 8,
-        duration: Duration::from_secs(duration),
+        duration: Duration::from_secs(10),
+        keep: false,
 
         buffers: vec![
             BrotBuffer {
@@ -57,39 +56,13 @@ fn main() {
                 max_iterations: 2000,
             },
         ],
-    }
-    .run();
+        results: None,
+    };
+    brot.run();
+    brot.print_stats();
+    brot.store();
 
-    println!("Rounding up");
-    for (i, buffer) in buffers.iter().enumerate() {
-        let samples = buffer.buffer.buffer.iter().map(|i| *i as u64).sum::<u64>();
-        println!("Buffer {} with {} samples, {:.2} samples/s, {:.2} samples/pixel, {:.4} samples/pixel/s",
-                 i,
-                 samples,
-                 samples as f64 / duration as f64,
-                 samples as f64 / (width * height) as f64,
-                 samples as f64 / (width * height) as f64 / duration as f64);
-    }
-
-    println!("Storing buffers");
-    for (i, buffer) in buffers.iter_mut().enumerate() {
-        let path = format!("buffer-{}.bread", i);
-
-        if keep && Path::new(&path).exists() {
-            let old_buffer = Buffer::load(
-                buffer.buffer.width,
-                buffer.buffer.height,
-                &path,
-            )
-            .expect("Could not load old buffer");
-
-            buffer.buffer.add(&old_buffer);
-        }
-        buffer
-            .buffer
-            .store(&path)
-            .expect("Couldn't store buffer");
-    }
+    let buffers = brot.results.unwrap();
 
     println!("Generating images");
     image::save_buffer(
@@ -123,11 +96,14 @@ struct BrotBuffer {
 struct Brot {
     thread_count: usize,
     duration: Duration,
+    keep: bool,
 
     buffers: Vec<BrotBuffer>,
+
+    results: Option<Vec<HitBuffer>>,
 }
 impl Brot {
-    fn run(&mut self) -> Vec<HitBuffer> {
+    fn run(&mut self) {
         println!("Setting up");
 
         let iterations = self
@@ -138,59 +114,68 @@ impl Brot {
             .expect("No buffer");
 
         println!("Starting");
-        thread::scope(|scope| {
-            let mut threads = vec![];
+        self.results = Some(
+            thread::scope(|scope| {
+                let mut threads = vec![];
 
-            for _ in 0..self.thread_count {
-                threads.push(scope.spawn(|_| {
-                    let mut rng = SmallRng::from_entropy();
+                for _ in 0..self.thread_count {
+                    threads.push(scope.spawn(|_| {
+                        let mut rng = SmallRng::from_entropy();
 
-                    let mut buffers = self
-                        .buffers
-                        .iter()
-                        .map(|b| HitBuffer::new(b.width, b.height, b.min, b.max))
-                        .collect::<Vec<_>>();
-                    let mut timer = Timer::new(Instant::now(), self.duration, TIMER_CHECK_MS);
-                    while !timer.check() {
-                        let c = Complex32::new(rng.gen_range(-2.0, 2.0), rng.gen_range(-2.0, 2.0));
-                        let z_initial = Complex32::new(0.0, 0.0);
+                        let mut buffers = self
+                            .buffers
+                            .iter()
+                            .map(|b| HitBuffer::new(b.width, b.height, b.min, b.max))
+                            .collect::<Vec<_>>();
+                        let mut timer = Timer::new(Instant::now(), self.duration, TIMER_CHECK_MS);
+                        while !timer.check() {
+                            let c =
+                                Complex32::new(rng.gen_range(-2.0, 2.0), rng.gen_range(-2.0, 2.0));
+                            let z_initial = Complex32::new(0.0, 0.0);
 
-                        if Brot::approximate_is_in_mandelbrot(c) {
-                            continue;
-                        }
+                            if Brot::approximate_is_in_mandelbrot(c) {
+                                continue;
+                            }
 
-                        if let Some(i) =
-                            Self::iterate_step(z_initial, c, 2.0, iterations, |_, _| ())
-                        {
-                            for (b_index, b) in self.buffers.iter().enumerate() {
-                                if b.min_iterations <= i && i < b.max_iterations {
-                                    Self::iterate_step(z_initial, c, 2.0, iterations, |i, z| {
-                                        if b.min_iterations <= i && i < b.max_iterations {
-                                            buffers[b_index].hit(z);
-                                        }
-                                    });
+                            if let Some(i) =
+                                Self::iterate_step(z_initial, c, 2.0, iterations, |_, _| ())
+                            {
+                                for (b_index, b) in self.buffers.iter().enumerate() {
+                                    if b.min_iterations <= i && i < b.max_iterations {
+                                        Self::iterate_step(
+                                            z_initial,
+                                            c,
+                                            2.0,
+                                            iterations,
+                                            |i, z| {
+                                                if b.min_iterations <= i && i < b.max_iterations {
+                                                    buffers[b_index].hit(z);
+                                                }
+                                            },
+                                        );
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    buffers
-                }));
-            }
-            let mut buffers = self
-                .buffers
-                .iter()
-                .map(|b| HitBuffer::new(b.width, b.height, b.min, b.max))
-                .collect::<Vec<_>>();
-            for thread in threads {
-                for (i, buffer) in thread.join().expect("Thread panicked").iter().enumerate() {
-                    buffers[i].add(buffer);
+                        buffers
+                    }));
                 }
-            }
+                let mut buffers = self
+                    .buffers
+                    .iter()
+                    .map(|b| HitBuffer::new(b.width, b.height, b.min, b.max))
+                    .collect::<Vec<_>>();
+                for thread in threads {
+                    for (i, buffer) in thread.join().expect("Thread panicked").iter().enumerate() {
+                        buffers[i].add(buffer);
+                    }
+                }
 
-            buffers
-        })
-        .expect("Error while executing threads")
+                buffers
+            })
+            .expect("Error while executing threads"),
+        );
     }
 
     fn approximate_is_in_mandelbrot(c: Complex32) -> bool {
@@ -217,6 +202,32 @@ impl Brot {
             f(i, z);
         }
         None
+    }
+
+    fn print_stats(&self) {
+        for (i, buffer) in self.results.as_ref().unwrap().iter().enumerate() {
+            let samples = buffer.buffer.buffer.iter().map(|i| *i as u64).sum::<u64>();
+            println!("Buffer {} with {} samples, {:.2} samples/s, {:.2} samples/pixel, {:.4} samples/pixel/s",
+                    i,
+                    samples,
+                    samples as f64 / self.duration.as_secs_f64(),
+                    samples as f64 / (buffer.buffer.width * buffer.buffer.height) as f64,
+                    samples as f64 / (buffer.buffer.width * buffer.buffer.height) as f64 / self.duration.as_secs_f64());
+        }
+    }
+
+    fn store(&mut self) {
+        for (i, buffer) in self.results.as_mut().unwrap().iter_mut().enumerate() {
+            let path = format!("buffer-{}.bread", i);
+
+            if Path::new(&path).exists() && self.keep {
+                let old_buffer = Buffer::load(buffer.buffer.width, buffer.buffer.height, &path)
+                    .expect("Could not load old buffer");
+
+                buffer.buffer.add(&old_buffer);
+            }
+            buffer.buffer.store(&path).expect("Couldn't store buffer");
+        }
     }
 }
 
@@ -290,7 +301,7 @@ impl<T: Clone> Clone for Buffer<T> {
         }
     }
 }
-impl<T: Copy + Add<T, Output=T>> Buffer<T> {
+impl<T: Copy + Add<T, Output = T>> Buffer<T> {
     fn add(&mut self, other: &Buffer<T>) {
         assert!(self.width == other.width);
         assert!(self.height == other.height);

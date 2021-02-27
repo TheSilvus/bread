@@ -12,3 +12,4 @@ rand = { version = "0.7", features = ["small_rng"] }
 image = "0.23"
 byteorder = "1"
 crossbeam = "0.8"
+clt = "0.0.6"
