@@ -14,19 +14,21 @@ use std::time::Instant;
 static TIMER_CHECK_MS: Duration = Duration::from_millis(50);
 
 fn main() {
+    let duration = 10;
+
     let width = 100;
     let height = 100;
 
-    let center = Complex32::new(-0.158, 1.033);
-    let size = 0.03;
-    //let center = Complex32::new(0.0, 0.0);
-    //let size = 4.0;
+    //let center = Complex32::new(-0.158, 1.033);
+    //let size = 0.03;
+    let center = Complex32::new(0.0, 0.0);
+    let size = 4.0;
 
     let min = center - Complex32::new(size / 2., size / 2.);
     let max = center + Complex32::new(size / 2., size / 2.);
     let buffers = Brot {
         thread_count: 8,
-        duration: Duration::from_secs(10),
+        duration: Duration::from_secs(duration),
 
         buffers: vec![
             BrotBuffer {
@@ -57,18 +59,10 @@ fn main() {
     }
     .run();
 
-    println!(
-        "{:?}",
-        buffers[0].buffer.buffer.iter().copied().sum::<u32>()
-    );
-    println!(
-        "{:?}",
-        buffers[1].buffer.buffer.iter().copied().sum::<u32>()
-    );
-    println!(
-        "{:?}",
-        buffers[2].buffer.buffer.iter().copied().sum::<u32>()
-    );
+    for (i, buffer) in buffers.iter().enumerate() {
+        let samples = buffer.buffer.buffer.iter().map(|i| *i as u64).sum::<u64>();
+        println!("Buffer {} with {} samples, {:.2} samples/s, {:.2} samples/pixel, {:.2} samples/pixel/s", i, samples, samples as f64 / duration as f64, samples as f64 / (width * height) as f64, samples as f64 / (width * height) as f64 / duration as f64);
+    }
 
     image::save_buffer(
         "image.png",
@@ -125,7 +119,7 @@ impl Brot {
                         .iter()
                         .map(|b| HitBuffer::new(b.width, b.height, b.min, b.max))
                         .collect::<Vec<_>>();
-                    let mut timer = Timer::new(self.duration, TIMER_CHECK_MS);
+                    let mut timer = Timer::new(Instant::now(), self.duration, TIMER_CHECK_MS);
                     while !timer.check() {
                         let c = Complex32::new(rng.gen_range(-2.0, 2.0), rng.gen_range(-2.0, 2.0));
                         let z_initial = Complex32::new(0.0, 0.0);
@@ -205,9 +199,9 @@ struct Timer {
     current: u32,
 }
 impl Timer {
-    fn new(total: Duration, check_difference: Duration) -> Timer {
+    fn new(start: Instant, total: Duration, check_difference: Duration) -> Timer {
         Timer {
-            start: Instant::now(),
+            start,
             total,
             last_check: Instant::now(),
             check_difference,
