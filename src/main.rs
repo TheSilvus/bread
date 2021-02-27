@@ -1,5 +1,3 @@
-use byteorder::LittleEndian;
-use byteorder::WriteBytesExt;
 use crossbeam::thread;
 use image::ColorType;
 use num::complex::Complex32;
@@ -7,7 +5,9 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use std::fs::File;
 use std::io;
-use std::io::BufWriter;
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::ops::Add;
+use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -15,6 +15,7 @@ static TIMER_CHECK_MS: Duration = Duration::from_millis(50);
 
 fn main() {
     let duration = 10;
+    let keep = false;
 
     let width = 1000;
     let height = 1000;
@@ -26,7 +27,7 @@ fn main() {
 
     let min = center - Complex32::new(size / 2., size / 2.);
     let max = center + Complex32::new(size / 2., size / 2.);
-    let buffers = Brot {
+    let mut buffers = Brot {
         thread_count: 8,
         duration: Duration::from_secs(duration),
 
@@ -59,6 +60,7 @@ fn main() {
     }
     .run();
 
+    println!("Rounding up");
     for (i, buffer) in buffers.iter().enumerate() {
         let samples = buffer.buffer.buffer.iter().map(|i| *i as u64).sum::<u64>();
         println!("Buffer {} with {} samples, {:.2} samples/s, {:.2} samples/pixel, {:.4} samples/pixel/s",
@@ -69,6 +71,27 @@ fn main() {
                  samples as f64 / (width * height) as f64 / duration as f64);
     }
 
+    println!("Storing buffers");
+    for (i, buffer) in buffers.iter_mut().enumerate() {
+        let path = format!("buffer-{}.bread", i);
+
+        if keep && Path::new(&path).exists() {
+            let old_buffer = Buffer::load(
+                buffer.buffer.width,
+                buffer.buffer.height,
+                &path,
+            )
+            .expect("Could not load old buffer");
+
+            buffer.buffer.add(&old_buffer);
+        }
+        buffer
+            .buffer
+            .store(&path)
+            .expect("Couldn't store buffer");
+    }
+
+    println!("Generating images");
     image::save_buffer(
         "image.png",
         &Buffer::join(
@@ -105,6 +128,8 @@ struct Brot {
 }
 impl Brot {
     fn run(&mut self) -> Vec<HitBuffer> {
+        println!("Setting up");
+
         let iterations = self
             .buffers
             .iter()
@@ -112,6 +137,7 @@ impl Brot {
             .max()
             .expect("No buffer");
 
+        println!("Starting");
         thread::scope(|scope| {
             let mut threads = vec![];
 
@@ -255,6 +281,25 @@ impl<T> Buffer<T> {
         self.buffer[y * self.width + x] = t;
     }
 }
+impl<T: Clone> Clone for Buffer<T> {
+    fn clone(&self) -> Buffer<T> {
+        Buffer {
+            width: self.width,
+            height: self.height,
+            buffer: self.buffer.clone(),
+        }
+    }
+}
+impl<T: Copy + Add<T, Output=T>> Buffer<T> {
+    fn add(&mut self, other: &Buffer<T>) {
+        assert!(self.width == other.width);
+        assert!(self.height == other.height);
+
+        for i in 0..self.buffer.len() {
+            self.buffer[i] = self.buffer[i] + other.buffer[i];
+        }
+    }
+}
 impl Buffer<u32> {
     fn to_u8(&self) -> Buffer<u8> {
         let max = self.buffer.iter().max().expect("");
@@ -272,10 +317,31 @@ impl Buffer<u32> {
     fn store(&self, file: &str) -> Result<(), io::Error> {
         let mut f = BufWriter::new(File::create(file)?);
         for i in &self.buffer {
-            f.write_u32::<LittleEndian>(*i)?;
+            f.write_all(&i.to_le_bytes())?;
         }
 
         Ok(())
+    }
+
+    fn load(width: usize, height: usize, file: &str) -> Result<Buffer<u32>, io::Error> {
+        let mut f = BufReader::new(File::open(file)?);
+        let mut buffer = Vec::with_capacity(width * height);
+
+        let mut temp = [0u8; 4];
+        while let Ok(()) = f.read_exact(&mut temp) {
+            buffer.push(u32::from_le_bytes(temp));
+        }
+
+        if buffer.len() != width * height {
+            // TODO replace this with result
+            panic!("Wrong file size");
+        }
+
+        Ok(Buffer {
+            width,
+            height,
+            buffer,
+        })
     }
 }
 impl Buffer<(u8, u8, u8)> {
@@ -302,6 +368,7 @@ impl Buffer<(u8, u8, u8)> {
     }
 }
 
+#[derive(Clone)]
 struct HitBuffer {
     buffer: Buffer<u32>,
     min: Complex32,
@@ -314,6 +381,10 @@ impl HitBuffer {
             min,
             max,
         }
+    }
+
+    fn from_buffer(min: Complex32, max: Complex32, buffer: Buffer<u32>) -> HitBuffer {
+        HitBuffer { buffer, min, max }
     }
 
     fn hit(&mut self, c: Complex32) {
