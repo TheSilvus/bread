@@ -17,14 +17,17 @@ pub struct BufferConfig {
 pub struct Config {
     pub thread_count: usize,
     pub duration: Duration,
+    pub cycles : u64,
     pub keep: bool,
 
     pub buffers: Vec<BufferConfig>,
 }
 
+
+
 pub fn get_config() -> Config {
-    let width = 1000;
-    let height = 1000;
+    let width = 10000;
+    let height = 10000;
 
     //let center = Complex32::new(-0.158, 1.033);
     //let size = 0.03;
@@ -35,9 +38,11 @@ pub fn get_config() -> Config {
     let max = center + Complex32::new(size / 2., size / 2.);
 
     Config {
-        thread_count: 8,
-        duration: Duration::from_secs(10),
-        keep: false,
+        thread_count: 6,
+        duration: Duration::from_secs(30),
+        //cycles: 1,
+        cycles: std::u64::MAX,
+        keep: true,
 
         buffers: vec![
             BufferConfig {

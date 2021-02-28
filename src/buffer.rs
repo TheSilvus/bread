@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io;
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::ops::Add;
+use std::ops::{Add, AddAssign};
 
 pub struct Buffer<T> {
     width: usize,
@@ -44,16 +44,36 @@ impl<T: Clone> Clone for Buffer<T> {
         }
     }
 }
-impl<T: Copy + Add<T, Output = T>> Buffer<T> {
-    pub fn add(&mut self, other: &Buffer<T>) {
+// TODO is it possible to remove the Copy bound here?
+// TODO implement different variants for references
+impl<T: AddAssign + Copy> AddAssign for Buffer<T> {
+    fn add_assign(&mut self, other: Buffer<T>) {
         assert!(self.width == other.width);
         assert!(self.height == other.height);
 
         for i in 0..self.buffer.len() {
-            self.buffer[i] = self.buffer[i] + other.buffer[i];
+            self.buffer[i] += other.buffer[i];
         }
     }
 }
+
+impl<U, T: Add<T, Output = U>> Add for Buffer<T> {
+    type Output = Buffer<U>;
+    fn add(mut self, mut other: Buffer<T>) -> Buffer<U> {
+        assert!(self.width() == other.width && self.height == other.height);
+        Buffer {
+            width: self.width,
+            height: self.height,
+            buffer: self
+                .buffer
+                .drain(..)
+                .zip(other.buffer.drain(..))
+                .map(|(x, y)| x + y)
+                .collect(),
+        }
+    }
+}
+
 impl Buffer<u32> {
     pub fn to_u8(&self) -> Buffer<u8> {
         let max = self.buffer.iter().max().expect("");
@@ -64,6 +84,18 @@ impl Buffer<u32> {
                 .buffer
                 .iter()
                 .map(|x| (x * 255 / max) as u8)
+                .collect::<Vec<_>>(),
+        }
+    }
+    pub fn to_f32(&self) -> Buffer<f32> {
+        let max = *self.buffer.iter().max().expect("") as f32;
+        Buffer {
+            width: self.width,
+            height: self.height,
+            buffer: self
+                .buffer
+                .iter()
+                .map(|x| *x as f32 / max)
                 .collect::<Vec<_>>(),
         }
     }
@@ -96,6 +128,67 @@ impl Buffer<u32> {
             height,
             buffer,
         })
+    }
+}
+impl Buffer<f32> {
+    /**
+     * $a \in [1, \infty)$
+     *
+     * $a = 1$ leads to identity, as $a \to \infty$ we almost everywhere approach f(x) = 1
+     */
+    pub fn polynomial(&mut self, a: f32) -> Buffer<f32> {
+        Buffer {
+            width: self.width,
+            height: self.height,
+            buffer: self
+                .buffer
+                .iter()
+                .map(|x| (*x as f32).powf(1.0 / a))
+                .collect(),
+        }
+    }
+
+    /**
+     * $a \in (0, \infty)$
+     *
+     * Approaches identity as $a \to 0$, approaches f(x) = 1 almost everywhere as $a \to infty$
+     */
+    pub fn exponential(&mut self, a: f32) -> Buffer<f32> {
+        use std::f32::consts::E;
+        let divisor = 1.0 - E.powf(-a);
+        Buffer {
+            width: self.width,
+            height: self.height,
+            buffer: self
+                .buffer
+                .iter()
+                .map(|x| (1.0 - E.powf(-a * x)) / divisor)
+                .collect(),
+        }
+    }
+
+    pub fn expose(&mut self, a: f32) -> Buffer<f32> {
+        Buffer {
+            width: self.width,
+            height: self.height,
+            buffer: self
+                .buffer
+                .iter()
+                .map(|x| a * x)
+                .collect(),
+        }
+    }
+
+    pub fn to_u8(&self) -> Buffer<u8> {
+        Buffer {
+            width: self.width,
+            height: self.height,
+            buffer: self
+                .buffer
+                .iter()
+                .map(|x| (x * 255.0).clamp(0.0, 255.0) as u8)
+                .collect::<Vec<_>>(),
+        }
     }
 }
 impl Buffer<(u8, u8, u8)> {

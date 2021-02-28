@@ -11,15 +11,29 @@ use bread::*;
 static TIMER_CHECK_MS: Duration = Duration::from_millis(50);
 
 fn main() {
+    let config = get_config();
+    if config.cycles > 1 && !config.keep {
+        panic!("More than one cycle and not keeping");
+    } else if config.cycles == 1 {
+        println!("Running");
+        run();
+    } else {
+        for i in 0..config.cycles {
+            println!("Cycle {}", i);
+            run();
+        }
+    }
+}
+fn run() {
     let mut brot = Brot {
         config: get_config(),
         results: None,
     };
-    println!("Running");
     brot.run();
-    brot.print_stats();
+    brot.print_stats1();
     println!("Storing");
     brot.store();
+    brot.print_stats2();
 }
 
 #[derive(Clone)]
@@ -94,8 +108,8 @@ impl Brot {
                     .map(|b| HitBuffer::new(b.width, b.height, b.min, b.max))
                     .collect::<Vec<_>>();
                 for thread in threads {
-                    for (i, buffer) in thread.join().expect("Thread panicked").iter().enumerate() {
-                        buffers[i].add(buffer);
+                    for (i, buffer) in thread.join().expect("Thread panicked").drain(..).enumerate() {
+                        buffers[i].buffer += buffer.buffer;
                     }
                 }
 
@@ -131,15 +145,36 @@ impl Brot {
         None
     }
 
-    fn print_stats(&self) {
+    fn print_stats1(&self) {
         for (i, buffer) in self.results.as_ref().unwrap().iter().enumerate() {
-            let samples = buffer.buffer.buffer().iter().map(|i| *i as u64).sum::<u64>();
-            println!("Buffer {} with {} samples, {:.2} samples/s, {:.2} samples/pixel, {:.4} samples/pixel/s",
+            let samples = buffer
+                .buffer
+                .buffer()
+                .iter()
+                .map(|i| *i as u64)
+                .sum::<u64>();
+            println!("Buffer {} has {} samples, {:.2} samples/s, {:.2} samples/pixel, {:.4} samples/pixel/s",
                     i,
                     samples,
                     samples as f64 / self.config.duration.as_secs_f64(),
                     samples as f64 / (buffer.buffer.width() * buffer.buffer.height()) as f64,
                     samples as f64 / (buffer.buffer.width() * buffer.buffer.height()) as f64 / self.config.duration.as_secs_f64());
+        }
+    }
+    fn print_stats2(&self) {
+        for (i, buffer) in self.results.as_ref().unwrap().iter().enumerate() {
+            let samples = buffer
+                .buffer
+                .buffer()
+                .iter()
+                .map(|i| *i as u64)
+                .sum::<u64>();
+            println!(
+                "Buffer {} has {:.2} samples, {:.2} samples/pixel",
+                i,
+                samples,
+                samples as f64 / (buffer.buffer.width() * buffer.buffer.height()) as f64
+            );
         }
     }
 
@@ -151,7 +186,7 @@ impl Brot {
                 let old_buffer = Buffer::load(buffer.buffer.width(), buffer.buffer.height(), &path)
                     .expect("Could not load old buffer");
 
-                buffer.buffer.add(&old_buffer);
+                buffer.buffer += old_buffer;
             }
             buffer.buffer.store(&path).expect("Couldn't store buffer");
         }
@@ -186,9 +221,6 @@ impl HitBuffer {
             y as usize,
             self.buffer.get(x as usize, y as usize) + 1,
         );
-    }
-    fn add(&mut self, other: &HitBuffer) {
-        self.buffer.add(&other.buffer);
     }
 }
 
