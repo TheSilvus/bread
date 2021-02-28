@@ -79,33 +79,37 @@ impl Brot {
 
                         let mut c = Self::rand_complex(self.config.min, self.config.max, &mut rng);
                         let mut c_iterations = 0;
-                        let mut c_hits = 0;
                         while !timer.check() {
-                            //let c = Self::rand_complex(self.config.min, self.config.max, &mut rng);
-                        
                             let new_c = self.mutate(c, &mut rng);
                             if Self::approximate_is_in_mandelbrot(new_c) {
                                 continue;
                             }
-                            let (new_iterations, new_hits) = if let Some(i) = self.count_hitting(z_initial, new_c, iterations) {
-                                i
-                            } else {
-                                continue;
-                            };
-                            if c_hits == 0 || rng.gen_range(0.0..1.0) < (new_hits as f32) / (c_hits as f32) {
+                            let (new_iterations, new_hits) =
+                                if let Some(i) = self.count_hitting(z_initial, new_c, iterations) {
+                                    i
+                                } else {
+                                    continue;
+                                };
+                            if new_hits > 0 {
                                 c = new_c;
                                 c_iterations = new_iterations;
-                                c_hits = new_hits;
                             }
 
-
                             for (b_index, b) in self.config.buffers.iter().enumerate() {
-                                if b.min_iterations <= c_iterations && c_iterations < b.max_iterations {
-                                    Self::iterate_step(z_initial, c, 2.0, b.max_iterations, |i, z| {
-                                        if b.min_iterations <= i && i < b.max_iterations {
-                                            buffers[b_index].hit(z, ((iterations as f32)/ (c_hits as f32)) as u32);
-                                        }
-                                    });
+                                if b.min_iterations <= c_iterations
+                                    && c_iterations < b.max_iterations
+                                {
+                                    Self::iterate_step(
+                                        z_initial,
+                                        c,
+                                        2.0,
+                                        b.max_iterations,
+                                        |i, z| {
+                                            if b.min_iterations <= i && i < b.max_iterations {
+                                                buffers[b_index].hit(z, 1);
+                                            }
+                                        },
+                                    );
                                 }
                             }
                         }
