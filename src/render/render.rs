@@ -3,8 +3,9 @@ use image::ColorType;
 use bread::*;
 
 fn main() {
-    let buffers = get_config().buffers.iter().enumerate().map(|(i, b)| {
-        Buffer::load(b.width, b.height, &format!("buffer-{}.bread", i)).expect("Could not load buffer")
+    let c = get_config();
+    let buffers = (0..c.buffers.len()).map(|i| {
+        Buffer::load(c.width, c.height, &format!("buffer-{}.bread", i)).expect("Could not load buffer")
     }).collect::<Vec<_>>();
 
     println!("Generating images");

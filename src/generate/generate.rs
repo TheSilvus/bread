@@ -60,12 +60,9 @@ impl Brot {
                     threads.push(scope.spawn(|_| {
                         let mut rng = SmallRng::from_entropy();
 
-                        let mut buffers = self
-                            .config
-                            .buffers
-                            .iter()
-                            .map(|b| HitBuffer::new(b.width, b.height, b.min, b.max))
-                            .collect::<Vec<_>>();
+                        let mut buffers = vec![
+                            HitBuffer::new(self.config.width, self.config.height, self.config.min, self.config.max); 
+                            self.config.buffers.len()];
                         let mut timer =
                             Timer::new(Instant::now(), self.config.duration, TIMER_CHECK_MS);
                         while !timer.check() {
@@ -101,12 +98,9 @@ impl Brot {
                         buffers
                     }));
                 }
-                let mut buffers = self
-                    .config
-                    .buffers
-                    .iter()
-                    .map(|b| HitBuffer::new(b.width, b.height, b.min, b.max))
-                    .collect::<Vec<_>>();
+                let mut buffers = vec![
+                            HitBuffer::new(self.config.width, self.config.height, self.config.min, self.config.max); 
+                            self.config.buffers.len()];
                 for thread in threads {
                     for (i, buffer) in thread.join().expect("Thread panicked").drain(..).enumerate() {
                         buffers[i].buffer += buffer.buffer;
@@ -118,6 +112,7 @@ impl Brot {
             .expect("Error while executing threads"),
         );
     }
+
 
     fn approximate_is_in_mandelbrot(c: Complex32) -> bool {
         let q = (c.re - 0.25) * (c.re - 0.25) + c.im * c.im;
