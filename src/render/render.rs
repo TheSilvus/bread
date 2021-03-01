@@ -15,9 +15,9 @@ fn main() {
     image::save_buffer(
         "image.png",
         &Buffer::join(
-            buffers[2].to_f32().exponential(3.0).expose(1.3).to_u8(),
-            buffers[1].to_f32().exponential(3.0).expose(1.3).to_u8(),
-            buffers[0].to_f32().exponential(3.0).to_u8(),
+            buffers[2].to_f32().exponential(8.0).expose(0.9).to_u8(),
+            buffers[1].to_f32().exponential(8.0).expose(0.9).to_u8(),
+            buffers[0].to_f32().exponential(8.0).to_u8(),
         )
         .flatten(),
         buffers[0].width() as u32,

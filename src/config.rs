@@ -27,14 +27,18 @@ pub struct Config {
 }
 
 pub fn get_config() -> Config {
-    let center = Complex32::new(-0.158, 1.033);
-    let size = 0.03;
-    //let center = Complex32::new(0.0, 0.0);
-    //let size = 4.0;
+    //let center = Complex32::new(-0.158, 1.033);
+    //let size = 0.03;
+    let center = Complex32::new(0.0, 0.0);
+    let size = 4.0;
+    //let center = Complex32::new(-1.015, -0.9005);
+    //let size = 0.025;
+    //let center = Complex32::new(-1.016, 0.808);
+    //let size = 0.25;
 
     Config {
         thread_count: 6,
-        duration: Duration::from_secs(5),
+        duration: Duration::from_secs(10),
         cycles: 1,
         //cycles: std::u64::MAX,
         keep: false,
