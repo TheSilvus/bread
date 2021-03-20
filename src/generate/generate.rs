@@ -178,11 +178,11 @@ impl Brot {
     }
     fn mutate(&self, c: Complex32, rng: &mut impl Rng) -> Complex32 {
         // TODO make mutation probability configurable
-        if rng.gen_range(0.0..1.0) < 0.1 {
+        if rng.gen_range(0.0..1.0) < self.config.mutate_jump {
             Self::rand_complex(self.config.min, self.config.max, rng)
         } else {
             // TODO make deviation configurable
-            Self::rand_complex_normal(c, 0.005, rng)
+            Self::rand_complex_normal(c, self.config.mutate_deviation, rng)
         }
     }
 

@@ -1,3 +1,5 @@
+use palette::{FromColor, Mix};
+
 use std::fs::File;
 use std::io;
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -171,11 +173,7 @@ impl Buffer<f32> {
         Buffer {
             width: self.width,
             height: self.height,
-            buffer: self
-                .buffer
-                .iter()
-                .map(|x| a * x)
-                .collect(),
+            buffer: self.buffer.iter().map(|x| a * x).collect(),
         }
     }
 
@@ -189,6 +187,66 @@ impl Buffer<f32> {
                 .map(|x| (x * 255.0).clamp(0.0, 255.0) as u8)
                 .collect::<Vec<_>>(),
         }
+    }
+
+    pub fn to_lab_rgb(&self, c: (u8, u8, u8)) -> Buffer<palette::Laba<palette::white_point::D65>> {
+        self.to_lab(palette::Lab::from_rgb(
+            palette::LinSrgb::from_components(c).into_format(),
+        ))
+    }
+
+    pub fn to_lab(&self, c: palette::Lab) -> Buffer<palette::Laba<palette::white_point::D65>> {
+        Buffer {
+            width: self.width,
+            height: self.height,
+            buffer: self
+                .buffer
+                .iter()
+                .map(|x| {
+                    let (l, a, b) = c.into_components();
+                    palette::Laba::<palette::white_point::D65>::new(l, a, b, *x)
+                })
+                .collect::<Vec<_>>(),
+        }
+    }
+}
+impl Buffer<palette::Alpha<palette::Lab, f32>> {
+    pub fn mix(b: Vec<Self>) -> Buffer<palette::Alpha<palette::Lab, f32>> {
+        let mut result = Vec::new();
+        for i in 0..b[0].buffer.len() {
+            let mut color = b[0].buffer[i];
+            for j in 1..b.len() {
+                color = b[j].buffer[i].mix(&color, 1.0 / (j as f32 + 1.0));
+            }
+
+            result.push(color);
+        }
+        Buffer {
+            width: b[0].width,
+            height: b[0].height,
+            buffer: result,
+        }
+    }
+
+    pub fn to_3u8(&self, base: palette::Lab) -> Buffer<(u8, u8, u8)> {
+        Buffer {
+            width: self.width,
+            height: self.height,
+            buffer: self
+                .buffer
+                .iter()
+                .map(|x| {
+                    palette::Srgb::from_lab(base.mix(&x.color, x.alpha))
+                        .into_format::<u8>()
+                        .into_components()
+                })
+                .collect::<Vec<_>>(),
+        }
+    }
+    pub fn to_3u8_rgb(&self, c: (u8, u8, u8)) -> Buffer<(u8, u8, u8)> {
+        self.to_3u8(palette::Lab::from_rgb(
+            palette::LinSrgb::from_components(c).into_format(),
+        ))
     }
 }
 impl Buffer<(u8, u8, u8)> {
@@ -212,5 +270,16 @@ impl Buffer<(u8, u8, u8)> {
             .iter()
             .flat_map(|(u1, u2, u3)| once(*u1).chain(once(*u2)).chain(once(*u3)))
             .collect()
+    }
+    pub fn inverse(&self) -> Self {
+        Buffer {
+            width: self.width,
+            height: self.height,
+            buffer: self
+                .buffer
+                .iter()
+                .map(|(r, g, b)| (255 - r, 255 - g, 255 - b))
+                .collect::<Vec<_>>(),
+        }
     }
 }
